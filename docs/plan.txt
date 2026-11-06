@@ -1,0 +1,527 @@
+SOCIAL MEDIA DATABASE
+MANAGEMENT SYSTEM
+A DBMS Mini Project Report
+Submitted as part of the Database Management Systems course
+Database Engine: MySQL / PostgreSQL
+Backend: Python (Flask) or Node.js (Express)
+Table of Contents
+1. Introduction	3
+1.1 Objectives	3
+1.2 Scope	3
+2. System Requirements	3
+2.1 Functional Requirements	3
+2.2 Non-Functional Requirements	3
+2.3 Tools & Technology Stack	4
+3. Entity-Relationship (ER) Diagram	5
+3.1 Relationship Summary	5
+4. Entity & Attribute Description	7
+4.1 Users	7
+4.2 Posts	7
+4.3 Comments	7
+4.4 Likes (junction table)	8
+4.5 Follows (self-referencing junction table)	8
+4.6 Notifications	8
+5. Normalization	10
+5.1 First Normal Form (1NF)	10
+5.2 Second Normal Form (2NF)	10
+5.3 Third Normal Form (3NF)	10
+5.4 A Deliberate Denormalization	10
+6. Relational Schema (DDL)	11
+7. Sample Queries	12
+7.1 Personalized Feed	12
+7.2 Top 10 Most-Liked Posts This Week	12
+7.3 Suggested Users to Follow	12
+7.4 Mutual Followers of Two Users	12
+7.5 Engagement Summary per User	13
+8. Triggers, Views & Stored Procedures	14
+8.1 Trigger: Keep like_count in Sync	14
+8.2 Trigger: Auto-generate a Notification on Like	14
+8.3 View: User Feed	14
+8.4 Stored Procedure: Mutual Followers	15
+9. Indexing Strategy	16
+10. Application Architecture	17
+11. Future Enhancements	17
+12. Conclusion	17
+1. Introduction
+This project designs and implements the backend database for a simplified social media platform, similar in spirit to Twitter or Instagram. The goal is to demonstrate practical database design skills — entity-relationship modeling, normalization, schema creation, and the use of advanced SQL features such as views, triggers, and stored procedures — on a dataset that has realistic, non-trivial relationships (self-referencing follows, many-to-many likes, cascading notifications).
+1.1 Objectives
+Design a normalized relational schema for a social media application.
+Model one-to-many, many-to-many, and self-referencing relationships correctly.
+Implement referential integrity using primary and foreign key constraints.
+Use triggers to maintain derived data (e.g., like counts) automatically.
+Use views and stored procedures to simplify common, repeated queries.
+Apply indexing to optimize the queries the application runs most frequently.
+Connect the database to a small backend application to demonstrate real usage.
+1.2 Scope
+The project covers user accounts, posts, comments, likes, follower relationships, and notifications. It intentionally excludes features such as direct messaging, media transcoding, and recommendation algorithms, which are outside the scope of a database-focused project and can be listed as future enhancements.
+2. System Requirements
+2.1 Functional Requirements
+Users can register, log in, and edit their profile.
+Users can create, edit, and delete posts.
+Users can comment on posts.
+Users can like/unlike posts.
+Users can follow/unfollow other users.
+Users receive notifications for likes, comments, and new followers.
+Users can view a personalized feed made up of posts from people they follow.
+2.2 Non-Functional Requirements
+Data integrity: no orphaned rows (e.g., a comment referencing a deleted post).
+Performance: feed and like-count queries should remain fast as data grows, via indexing.
+Consistency: like/follow counts must always match the underlying rows (enforced by triggers, not application code).
+2.3 Tools & Technology Stack
+Attribute
+Data Type
+Key
+Description
+Database
+MySQL 8 / PostgreSQL 14+
+—
+Stores all relational data
+Backend language
+Python 3 / Node.js
+—
+Connects to DB, exposes REST API
+Backend framework
+Flask / Express
+—
+Routes for register, post, like, follow, feed
+DB connector
+mysql-connector-python / psycopg2 / Sequelize
+—
+Executes parameterized SQL
+Diagramming
+MySQL Workbench / dbdiagram.io
+—
+ER modeling
+Version control
+Git + GitHub
+—
+Source and schema history
+3. Entity-Relationship (ER) Diagram
+The diagram below shows all six entities, their key attributes, and the relationships between them. Primary keys are marked PK and foreign keys FK. Likes and Follows are junction (bridge) tables that resolve the two many-to-many relationships in the system.
+3.1 Relationship Summary
+Attribute
+Data Type
+Key
+Description
+Users → Posts
+1 : M
+—
+A user can write many posts; each post belongs to exactly one user
+Users → Comments
+1 : M
+—
+A user can write many comments
+Posts → Comments
+1 : M
+—
+A post can have many comments
+Users ↔ Posts (Likes)
+M : N
+via Likes
+A user can like many posts; a post can be liked by many users
+Users ↔ Users (Follows)
+M : N
+via Follows, self-referencing
+A user can follow many users and be followed by many users
+Users → Notifications
+1 : M
+—
+A user can receive many notifications
+4. Entity & Attribute Description
+4.1 Users
+Stores account information for every registered user of the platform.
+Attribute
+Data Type
+Key
+Description
+user_id
+INT / SERIAL
+PK
+Unique identifier, auto-incremented
+username
+VARCHAR(30)
+UNIQUE, NOT NULL
+Public handle shown on posts and profile
+email
+VARCHAR(255)
+UNIQUE, NOT NULL
+Login credential and contact address
+password_hash
+VARCHAR(255)
+NOT NULL
+Hashed password — never stored in plain text
+bio
+TEXT
+NULL
+Optional short profile description
+created_at
+TIMESTAMP
+DEFAULT NOW()
+Account creation time
+4.2 Posts
+Stores every post created by a user, including a denormalized like counter for fast reads.
+Attribute
+Data Type
+Key
+Description
+post_id
+INT / SERIAL
+PK
+Unique identifier
+user_id
+INT
+FK → Users
+Author of the post
+content
+VARCHAR(2200)
+NOT NULL
+Post text
+media_url
+VARCHAR(500)
+NULL
+Optional image/video attachment link
+like_count
+INT
+DEFAULT 0
+Denormalized count, maintained by trigger
+is_deleted
+BOOLEAN
+DEFAULT FALSE
+Soft-delete flag
+created_at
+TIMESTAMP
+DEFAULT NOW()
+Post creation time
+4.3 Comments
+Stores replies made by users on posts.
+Attribute
+Data Type
+Key
+Description
+comment_id
+INT / SERIAL
+PK
+Unique identifier
+post_id
+INT
+FK → Posts
+Post being commented on
+user_id
+INT
+FK → Users
+Author of the comment
+content
+VARCHAR(500)
+NOT NULL
+Comment text
+created_at
+TIMESTAMP
+DEFAULT NOW()
+Comment creation time
+4.4 Likes (junction table)
+Resolves the many-to-many relationship between Users and Posts. The combination of user_id and post_id is unique — a user can like a given post only once.
+Attribute
+Data Type
+Key
+Description
+user_id
+INT
+PK, FK → Users
+The user who liked the post
+post_id
+INT
+PK, FK → Posts
+The post that was liked
+created_at
+TIMESTAMP
+DEFAULT NOW()
+When the like was made
+4.5 Follows (self-referencing junction table)
+Resolves the many-to-many relationship of Users following other Users. Both columns reference the Users table.
+Attribute
+Data Type
+Key
+Description
+follower_id
+INT
+PK, FK → Users
+The user who initiates the follow
+following_id
+INT
+PK, FK → Users
+The user being followed
+created_at
+TIMESTAMP
+DEFAULT NOW()
+When the follow happened
+A CHECK constraint (follower_id <> following_id) prevents a user from following themselves.
+4.6 Notifications
+Stores alerts generated when another user likes, comments, or follows. reference_id points at the row (post, comment, or follow) that triggered the notification; type distinguishes how to interpret it.
+Attribute
+Data Type
+Key
+Description
+notification_id
+INT / SERIAL
+PK
+Unique identifier
+user_id
+INT
+FK → Users
+Recipient of the notification
+type
+VARCHAR(20)
+NOT NULL
+'like', 'comment', or 'follow'
+reference_id
+INT
+NOT NULL
+ID of the related post / comment / follow row
+is_read
+BOOLEAN
+DEFAULT FALSE
+Whether the user has seen it
+created_at
+TIMESTAMP
+DEFAULT NOW()
+When the notification was generated
+5. Normalization
+Normalization removes redundancy and update anomalies by progressively splitting data into related tables. Below is the reasoning applied to this schema.
+5.1 First Normal Form (1NF)
+Every column holds a single atomic value — e.g., a post has one content field rather than a comma-separated list of hashtags, and there are no repeating groups (a user is never given post1, post2, post3 columns). All tables satisfy 1NF.
+5.2 Second Normal Form (2NF)
+2NF requires that non-key attributes depend on the whole primary key, which only matters for composite keys. In Likes (PK: user_id + post_id) and Follows (PK: follower_id + following_id), the only non-key column is created_at, which depends on the combination of both keys together — not on either key alone — so 2NF holds.
+5.3 Third Normal Form (3NF)
+3NF requires that non-key attributes depend only on the primary key, not on other non-key attributes (no transitive dependencies). For example, Posts does not store the author's username or email — those live only in Users and are retrieved via a join. This avoids the anomaly where changing a username would require updating every post row.
+5.4 A Deliberate Denormalization
+Posts.like_count is a deliberate exception: it duplicates information that could be derived with COUNT(*) FROM Likes WHERE post_id = ?. It is kept as a maintained column because feeds display like counts on every post, and recomputing that with a COUNT() on every read does not scale. A trigger (Section 8.1) keeps it consistent with the Likes table, so the denormalization never drifts out of sync.
+6. Relational Schema (DDL)
+The following CREATE TABLE statements implement the design above in standard SQL (MySQL/PostgreSQL compatible with minor type adjustments).
+CREATE TABLE Users (
+    user_id        INT AUTO_INCREMENT PRIMARY KEY,
+    username       VARCHAR(30)  UNIQUE NOT NULL,
+    email          VARCHAR(255) UNIQUE NOT NULL,
+    password_hash  VARCHAR(255) NOT NULL,
+    bio            TEXT,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+ 
+CREATE TABLE Posts (
+    post_id      INT AUTO_INCREMENT PRIMARY KEY,
+    user_id      INT NOT NULL,
+    content      VARCHAR(2200) NOT NULL,
+    media_url    VARCHAR(500),
+    like_count   INT DEFAULT 0,
+    is_deleted   BOOLEAN DEFAULT FALSE,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+ 
+CREATE TABLE Comments (
+    comment_id   INT AUTO_INCREMENT PRIMARY KEY,
+    post_id      INT NOT NULL,
+    user_id      INT NOT NULL,
+    content      VARCHAR(500) NOT NULL,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES Posts(post_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+ 
+CREATE TABLE Likes (
+    user_id      INT NOT NULL,
+    post_id      INT NOT NULL,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, post_id),
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES Posts(post_id) ON DELETE CASCADE
+);
+ 
+CREATE TABLE Follows (
+    follower_id   INT NOT NULL,
+    following_id  INT NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (follower_id, following_id),
+    FOREIGN KEY (follower_id)  REFERENCES Users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (following_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+    CHECK (follower_id <> following_id)
+);
+ 
+CREATE TABLE Notifications (
+    notification_id  INT AUTO_INCREMENT PRIMARY KEY,
+    user_id          INT NOT NULL,
+    type             VARCHAR(20) NOT NULL,
+    reference_id     INT NOT NULL,
+    is_read          BOOLEAN DEFAULT FALSE,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+7. Sample Queries
+7.1 Personalized Feed
+Posts from everyone a given user follows, most recent first.
+SELECT p.post_id, u.username, p.content, p.like_count, p.created_at
+FROM Posts p
+JOIN Users u        ON u.user_id = p.user_id
+JOIN Follows f      ON f.following_id = p.user_id
+WHERE f.follower_id = ?
+  AND p.is_deleted = FALSE
+ORDER BY p.created_at DESC
+LIMIT 20 OFFSET 0;
+7.2 Top 10 Most-Liked Posts This Week
+SELECT p.post_id, u.username, p.content, p.like_count
+FROM Posts p
+JOIN Users u ON u.user_id = p.user_id
+WHERE p.created_at >= NOW() - INTERVAL 7 DAY
+ORDER BY p.like_count DESC
+LIMIT 10;
+7.3 Suggested Users to Follow
+Users followed by people you follow, excluding those you already follow and yourself — a classic 'friends of friends' self-join.
+SELECT DISTINCT u.user_id, u.username
+FROM Follows f1
+JOIN Follows f2 ON f1.following_id = f2.follower_id
+JOIN Users u    ON u.user_id = f2.following_id
+WHERE f1.follower_id = ?          -- the current user
+  AND f2.following_id <> ?        -- exclude self
+  AND f2.following_id NOT IN (
+        SELECT following_id FROM Follows WHERE follower_id = ?
+  );
+7.4 Mutual Followers of Two Users
+SELECT u.username
+FROM Follows f1
+JOIN Follows f2 ON f1.follower_id = f2.follower_id
+JOIN Users u    ON u.user_id = f1.follower_id
+WHERE f1.following_id = ?   -- user A
+  AND f2.following_id = ?;  -- user B
+7.5 Engagement Summary per User
+SELECT u.username,
+       COUNT(DISTINCT p.post_id)  AS total_posts,
+       COALESCE(SUM(p.like_count), 0) AS total_likes_received,
+       COUNT(DISTINCT c.comment_id)   AS total_comments_written
+FROM Users u
+LEFT JOIN Posts p    ON p.user_id = u.user_id
+LEFT JOIN Comments c ON c.user_id = u.user_id
+GROUP BY u.user_id, u.username
+ORDER BY total_likes_received DESC;
+8. Triggers, Views & Stored Procedures
+8.1 Trigger: Keep like_count in Sync
+Rather than trusting the application layer to update the counter, the database enforces consistency itself.
+DELIMITER $$
+CREATE TRIGGER trg_like_insert
+AFTER INSERT ON Likes
+FOR EACH ROW
+BEGIN
+    UPDATE Posts SET like_count = like_count + 1
+    WHERE post_id = NEW.post_id;
+END$$
+ 
+CREATE TRIGGER trg_like_delete
+AFTER DELETE ON Likes
+FOR EACH ROW
+BEGIN
+    UPDATE Posts SET like_count = like_count - 1
+    WHERE post_id = OLD.post_id;
+END$$
+DELIMITER ;
+8.2 Trigger: Auto-generate a Notification on Like
+DELIMITER $$
+CREATE TRIGGER trg_notify_on_like
+AFTER INSERT ON Likes
+FOR EACH ROW
+BEGIN
+    INSERT INTO Notifications (user_id, type, reference_id)
+    SELECT p.user_id, 'like', NEW.post_id
+    FROM Posts p
+    WHERE p.post_id = NEW.post_id
+      AND p.user_id <> NEW.user_id;   -- don't notify yourself
+END$$
+DELIMITER ;
+8.3 View: User Feed
+CREATE VIEW user_feed AS
+SELECT f.follower_id AS viewer_id,
+       p.post_id, p.content, p.like_count, p.created_at,
+       u.username AS author
+FROM Follows f
+JOIN Posts p ON p.user_id = f.following_id
+JOIN Users u ON u.user_id = p.user_id
+WHERE p.is_deleted = FALSE;
+ 
+-- Usage:
+SELECT * FROM user_feed WHERE viewer_id = 7 ORDER BY created_at DESC;
+8.4 Stored Procedure: Mutual Followers
+DELIMITER $$
+CREATE PROCEDURE get_mutual_followers(IN user_a INT, IN user_b INT)
+BEGIN
+    SELECT u.user_id, u.username
+    FROM Follows f1
+    JOIN Follows f2 ON f1.follower_id = f2.follower_id
+    JOIN Users u    ON u.user_id = f1.follower_id
+    WHERE f1.following_id = user_a
+      AND f2.following_id = user_b;
+END$$
+DELIMITER ;
+ 
+-- Usage:
+CALL get_mutual_followers(3, 9);
+9. Indexing Strategy
+Indexes are added on columns that are filtered or joined on frequently, since these are exactly the queries above (feed generation, like counting, follow lookups).
+Attribute
+Data Type
+Key
+Description
+idx_posts_user_created
+Posts(user_id, created_at)
+Speeds up fetching a user's own posts, newest first
+idx_follows_following
+Follows(following_id)
+Speeds up 'who follows user X' and feed joins
+idx_follows_follower
+Follows(follower_id)
+Speeds up 'who does user X follow'
+idx_likes_post
+Likes(post_id)
+Speeds up counting/listing likers of a post
+idx_comments_post
+Comments(post_id)
+Speeds up loading a post's comment thread
+idx_notifications_user_read
+Notifications(user_id, is_read)
+Speeds up 'unread notifications for user X'
+Recommended validation: run EXPLAIN (MySQL) or EXPLAIN ANALYZE (PostgreSQL) on the feed query before and after adding idx_follows_following, and record the change in estimated rows scanned in the project report — this is a query performance comparison that evaluators specifically look for.
+10. Application Architecture
+The database sits behind a thin REST API so the project can be demonstrated live rather than through raw SQL alone.
+Attribute
+Data Type
+Key
+Description
+POST
+/register
+Create a new user (hash password before insert)
+POST
+/login
+Authenticate and return a session/token
+POST
+/posts
+Create a post
+GET
+/feed
+Return the caller's personalized feed (uses user_feed view)
+POST
+/posts/:id/like
+Insert a row into Likes (trigger updates like_count)
+DELETE
+/posts/:id/like
+Remove a row from Likes
+POST
+/users/:id/follow
+Insert a row into Follows
+GET
+/notifications
+Return unread notifications for the caller
+Passwords are hashed (e.g., bcrypt) before insertion — the database never stores plain-text credentials. All queries from the API layer use parameterized statements to prevent SQL injection.
+11. Future Enhancements
+Direct messaging between users (would need a Messages table with sender/receiver).
+Hashtags and search (tag extraction + full-text index on Posts.content).
+Media table separate from Posts to support multiple images/videos per post.
+Basic recommendation logic using engagement history.
+Partitioning Posts by date once data volume grows large enough to matter.
+12. Conclusion
+This project applies core DBMS concepts — ER modeling, normalization, constraints, triggers, views, stored procedures, and indexing — to a realistic, multi-relationship domain. The schema enforces integrity at the database layer rather than relying solely on application code, which is the central lesson the project is meant to demonstrate: a well-designed database should be correct and consistent even if the application code above it has bugs.

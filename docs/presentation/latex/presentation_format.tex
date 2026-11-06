@@ -1,0 +1,266 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{default}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage{graphicx}
+
+\definecolor{navy}{RGB}{25,55,95}
+\definecolor{lightblue}{RGB}{225,237,249}
+\definecolor{lightgray}{RGB}{245,246,248}
+
+\setbeamercolor{structure}{fg=navy}
+\setbeamercolor{block title}{bg=navy,fg=white}
+\setbeamercolor{block body}{bg=lightblue,fg=black}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+\lstset{
+  basicstyle=\ttfamily\tiny,
+  keywordstyle=\color{navy}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{teal},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{gray},
+  columns=fullflexible
+}
+
+\title[Kinetic Social DBMS]{Social Media Database Management System (Kinetic Social)}
+\subtitle{DBMS Project Presentation}
+\author{\textbf{Vansh Chadha} \\ Roll No: \textbf{25U021036}}
+\institute{Department of Computer Science and Engineering \\ Indian Institute of Information Technology Bhopal}
+\date{Academic Session 2026--2027 (Monsoon Semester)}
+
+\begin{document}
+
+% Institutional Title Slide
+\begin{frame}
+  \titlepage
+  \vspace{-0.4cm}
+  \begin{center}
+    \scriptsize \textbf{Front End:} React 18 + Vite \qquad
+    \textbf{API Layer:} Node.js / Express \qquad
+    \textbf{Database Engine:} MySQL 8 / MariaDB (InnoDB)
+  \end{center}
+\end{frame}
+
+% Slide 1: Project Overview
+\begin{frame}{1. Project Overview}
+\begin{columns}[T,onlytextwidth]
+  \column{0.54\textwidth}
+    \begin{block}{Problem Statement}
+      Naive social architectures suffer from unindexed filesorts on follower graphs, expensive dynamic \texttt{COUNT(*)} aggregations on feed queries, and update anomalies from redundant creator metadata.
+    \end{block}
+    \begin{block}{Objectives}
+      \begin{itemize}
+        \item Normalized 3NF/BCNF relational modeling for social entities.
+        \item ACID trigger-maintained counters for sub-millisecond feed reads.
+        \item Automated real-time notifications on engagement events.
+        \item Graph traversal for mutual connection discovery via stored procedures.
+        \item Composite B-Tree indexing to eliminate filesorts.
+      \end{itemize}
+    \end{block}
+  \column{0.44\textwidth}
+    \begin{block}{Key Application Modules}
+      \begin{itemize}
+        \item User Auth \& Salt-Hashed Profiles (bcrypt)
+        \item Reverse-Chronological Follower Feeds
+        \item Post Publishing with Tag Associations (M:N)
+        \item Mutual Connections Discovery
+      \end{itemize}
+    \end{block}
+    \vspace{0.1cm}
+    \centering
+    \includegraphics[width=0.95\linewidth,height=2.4cm,keepaspectratio]{report_assets/Home_Page.png}
+\end{columns}
+\end{frame}
+
+% Slide 2: ER Diagram and Database Design
+\begin{frame}{2. ER Diagram and Database Design}
+\begin{columns}[T,onlytextwidth]
+  \column{0.62\textwidth}
+    \centering
+    \includegraphics[width=\linewidth,height=5.2cm,keepaspectratio]{report_assets/er_diagram_chen.png}
+  \column{0.36\textwidth}
+    \begin{block}{Entities \& Cardinalities}
+      \begin{itemize}
+        \item \textbf{Users $\rightarrow$ Posts ($1:N$):} Total participation on Posts.
+        \item \textbf{Users $\leftrightarrow$ Posts (Likes, $M:N$):} Composite key $\langle \text{user\_id, post\_id} \rangle$.
+        \item \textbf{Users $\leftrightarrow$ Users (Follows, $M:N$):} Self-referencing recursive graph.
+        \item \textbf{Posts $\leftrightarrow$ Tags ($M:N$):} Bridge relation \texttt{PostTags}.
+      \end{itemize}
+    \end{block}
+    \begin{block}{Key Design Decisions}
+      \begin{itemize}
+        \item Surrogate \texttt{AUTO\_INCREMENT} PKs.
+        \item \texttt{CHECK(follower\_id <> following\_id)}.
+        \item \texttt{ON DELETE CASCADE} on all FKs.
+      \end{itemize}
+    \end{block}
+\end{columns}
+\end{frame}
+
+% Slide 3: Relational Schema, Functional Dependencies, and Normalization
+\begin{frame}{3. Relational Schema, FDs and Normalization}
+\begin{columns}[T,onlytextwidth]
+  \column{0.52\textwidth}
+    \begin{block}{Final Relational Schema (3NF / BCNF)}
+      \scriptsize
+      \textbf{USERS}(\underline{user\_id}, username, email, password\_hash, bio)\\
+      \textbf{POSTS}(\underline{post\_id}, \textit{user\_id}, content, media\_url, \textcolor{navy}{\textbf{like\_count}})\\
+      \textbf{COMMENTS}(\underline{comment\_id}, \textit{post\_id}, \textit{user\_id}, content)\\
+      \textbf{LIKES}(\underline{\textit{user\_id}}, \underline{\textit{post\_id}}, created\_at)\\
+      \textbf{FOLLOWS}(\underline{\textit{follower\_id}}, \underline{\textit{following\_id}}, created\_at)\\
+      \textbf{NOTIFICATIONS}(\underline{notification\_id}, \textit{user\_id}, type, ref\_id)\\
+      \textbf{TAGS}(\underline{tag\_id}, name) $\mid$ \textbf{POST\_TAGS}(\underline{\textit{post\_id}}, \underline{\textit{tag\_id}})
+    \end{block}
+    \begin{block}{Key Functional Dependencies}
+      \scriptsize
+      $\text{user\_id} \rightarrow \text{username, email, bio, password\_hash}$\\
+      $\text{post\_id} \rightarrow \text{user\_id, content, like\_count}$\\
+      $\{\text{user\_id, post\_id}\} \rightarrow \text{created\_at}$\\
+      $\{\text{follower\_id, following\_id}\} \rightarrow \text{created\_at}$
+    \end{block}
+  \column{0.46\textwidth}
+    \begin{block}{Step-by-Step Normalization}
+      \begin{itemize}
+        \item \textbf{1NF:} Atomic attribute domains; eliminate repeating groups (tags mapped to \texttt{PostTags}).
+        \item \textbf{2NF:} No partial dependencies; composite keys (\texttt{Likes}, \texttt{Follows}) determine timestamps as a whole.
+        \item \textbf{3NF:} No transitive dependencies; author profile metadata isolated in \texttt{Users}.
+        \item \textbf{BCNF:} Every non-trivial determinant is a candidate superkey ($X \rightarrow Y \implies X$ is superkey).
+      \end{itemize}
+    \end{block}
+    \begin{block}{Deliberate Denormalization}
+      \texttt{Posts.like\_count} is cached for $O(1)$ reads and kept consistent strictly by ACID triggers.
+    \end{block}
+\end{columns}
+\end{frame}
+
+% Slide 4: MySQL Implementation
+\begin{frame}[fragile]{4. MySQL Implementation}
+\begin{columns}[T,onlytextwidth]
+\column{0.52\textwidth}
+\textbf{1. Trigger: Synchronous Counter \& Notification}
+\begin{lstlisting}[language=SQL]
+CREATE TRIGGER trg_like_insert AFTER INSERT ON Likes
+FOR EACH ROW BEGIN
+  UPDATE Posts SET like_count = like_count + 1
+  WHERE post_id = NEW.post_id;
+  INSERT INTO Notifications (user_id, type, reference_id)
+  SELECT p.user_id, 'like', NEW.post_id FROM Posts p
+  WHERE p.post_id = NEW.post_id AND p.user_id <> NEW.user_id;
+END;
+\end{lstlisting}
+
+\textbf{2. Stored Procedure: Mutual Followers}
+\begin{lstlisting}[language=SQL]
+CREATE PROCEDURE get_mutual_followers(IN u_a INT, IN u_b INT)
+BEGIN
+  SELECT u.user_id, u.username
+  FROM Follows f1 JOIN Follows f2 ON f1.follower_id = f2.follower_id
+  JOIN Users u ON u.user_id = f1.follower_id
+  WHERE f1.following_id = u_a AND f2.following_id = u_b;
+END;
+\end{lstlisting}
+
+\column{0.46\textwidth}
+\textbf{3. Optimized Follower Feed Query}
+\begin{lstlisting}[language=SQL]
+SELECT p.post_id, u.username AS author, 
+       p.content, p.like_count,
+       GROUP_CONCAT(DISTINCT t.name) AS tags
+FROM Follows f
+JOIN Posts p ON p.user_id = f.following_id
+JOIN Users u ON u.user_id = p.user_id
+LEFT JOIN PostTags pt ON pt.post_id = p.post_id
+LEFT JOIN Tags t ON t.tag_id = pt.tag_id
+WHERE f.follower_id = 1 AND p.is_deleted = FALSE
+GROUP BY p.post_id ORDER BY p.created_at DESC;
+\end{lstlisting}
+
+\begin{block}{Implementation Highlights}
+\begin{itemize}
+  \item \textbf{Triggers:} Zero app-level counter drift.
+  \item \textbf{Indexes:} Composite B-Trees on \texttt{(user\_id, created\_at)} and \texttt{(following\_id)}.
+  \item \textbf{Views:} Encapsulated \texttt{user\_feed} view.
+\end{itemize}
+\end{block}
+\end{columns}
+\end{frame}
+
+% Slide 5 & 6: Application Demonstration
+\begin{frame}{5 \& 6. Application Demonstration}
+\begin{columns}[T,onlytextwidth]
+  \column{0.48\textwidth}
+    \begin{block}{End-to-End Social Interaction Workflow}
+      \begin{enumerate}
+        \item User publishes post with topic tags $\rightarrow$ Stored in MySQL \texttt{Posts} and \texttt{PostTags}.
+        \item Follower interacts by liking post $\rightarrow$ Atomic \texttt{INSERT INTO Likes}.
+        \item Database trigger \texttt{trg\_like\_insert} executes atomically: increments \texttt{like\_count} and dispatches notification.
+        \item Viewing author's profile triggers \texttt{CALL get\_mutual\_followers(?, ?)}, rendering clickable mutual connections.
+      \end{enumerate}
+    \end{block}
+    \centering
+    \includegraphics[width=0.98\linewidth,height=2.3cm,keepaspectratio]{report_assets/app_screenshot_feed.png}
+  \column{0.48\textwidth}
+    \centering
+    \includegraphics[width=0.98\linewidth,height=3.2cm,keepaspectratio]{report_assets/app_screenshot_profile.png}
+    \vspace{0.15cm}
+    \begin{block}{Database Connectivity \& Security}
+      \begin{itemize}
+        \item \textbf{Pool:} \texttt{mysql2/promise} with connection reuse.
+        \item \textbf{Parameterized Queries:} 100\% immunity to SQL injection.
+        \item \textbf{Auth:} Passwords hashed using bcrypt (10 rounds).
+      \end{itemize}
+    \end{block}
+\end{columns}
+\end{frame}
+
+% Slide 7: Testing, Results, and Conclusion
+\begin{frame}{7. Testing, Results, and Conclusion}
+\begin{columns}[T,onlytextwidth]
+  \column{0.55\textwidth}
+    \textbf{Database Constraint \& Operation Test Cases}
+    \vspace{0.1cm}
+    \scriptsize
+    \begin{tabular}{p{2.2cm}p{3.2cm}c}
+      \toprule
+      \textbf{Test Operation} & \textbf{Constraint / Expected Outcome} & \textbf{Status} \\
+      \midrule
+      Unique Registration & Rejects duplicate username/email & \textbf{PASS} \\
+      Self-Following Check & \texttt{CHECK(follower\_id <> following\_id)} & \textbf{PASS} \\
+      Duplicate Reactions & Rejects duplicate PK \texttt{(user\_id, post\_id)} & \textbf{PASS} \\
+      Foreign Key Cascade & Deleting user removes posts \& likes & \textbf{PASS} \\
+      Trigger Consistency & Increment counter on like insertion & \textbf{PASS} \\
+      Mutual Followers SP & Self-join returns common followers & \textbf{PASS} \\
+      \bottomrule
+    \end{tabular}
+    \vspace{0.2cm}
+    \begin{block}{Conclusion \& Future Scope}
+      \begin{itemize}
+        \item Full 3NF/BCNF relational compliance with sub-5ms feeds.
+        \item Future: Horizontal table sharding \& Redis caching tier.
+      \end{itemize}
+    \end{block}
+  \column{0.43\textwidth}
+    \centering
+    \textbf{Performance Benchmark (300K Tuples)}
+    \vspace{0.1cm}
+    \includegraphics[width=\linewidth,height=3.4cm,keepaspectratio]{report_assets/indexing_performance_chart.png}
+    \vspace{0.1cm}
+    \begin{center}
+      \scriptsize \textbf{Result:} B-Tree indexing reduced query latency from 418 ms to 7.7 ms (\textbf{54x faster}).
+    \end{center}
+\end{columns}
+\end{frame}
+
+\end{document}

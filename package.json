@@ -1,0 +1,19 @@
+{
+  "name": "kinetic-social",
+  "version": "1.0.0",
+  "description": "Enterprise Relational DBMS Full-Stack Social Platform",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "install:backend": "npm install --prefix backend",
+    "install:frontend": "npm install --prefix frontend",
+    "setup:db": "cd database && node setup_db.js",
+    "start:backend": "npm start --prefix backend",
+    "start:frontend": "npm run dev --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}
